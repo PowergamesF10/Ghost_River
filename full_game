@@ -1,0 +1,204 @@
+import pgzrun
+import random
+import math
+
+WIDTH = 800
+HEIGHT = 600
+MAX_BULLETS = 5
+TITLE = "Ghost River"
+
+# ustawienie muzyki odtwarzanej w grze
+music.play("music-end-01")
+# ustawienie głośności na 5%
+music.set_volume(0.5)
+music_play = True
+
+lines = []          # list of tuples of horizontal lines of walls
+wall_gradient = -3  # steepness of wall
+left_wall_x = 20   # x-coordinate of wall
+distance = 100        # how far player has travelled
+time = 100           # time left until game ends
+playing = False
+delta = 2
+
+enemies = []
+barrel_fuels = []
+score = 0
+level = 1
+bullets = []
+game_over = False
+
+background_images = ['water']
+backgrounds = []
+background = Actor(random.choice(background_images))
+background.x = 400
+background.y = 300
+backgrounds.append(background)
+background = Actor(random.choice(background_images))
+background.x = 400
+background.y = -300
+backgrounds.append(background)
+
+plane = Actor("drone", midbottom=(400, 600))
+plane.vx = 1.5   # horizontal velocity
+plane.vy = 3  # vertical velocity
+
+enemy = Actor('ghost')
+enemy.y = 0
+enemy.x = random.randint(70, 730)
+
+barrel_fuel = Actor('shieldsilver')
+barrel_fuel.y = 0
+barrel_fuel.x = random.randint(70, 730)
+
+def update(delta):
+    global playing, distance, score, time, game_over
+    if playing:
+        wall_collisions()
+        fuel(delta)
+        move_enemies()
+        move_barrel_fuel()
+        generate_lines()
+        move_bullets()
+        scroll_walls()
+        player_input()
+    if keyboard.space and not playing:
+        playing = True
+        distance = 0
+
+    if game_over and playing:
+        playing = True
+
+    if game_over:
+        playing = False
+
+def player_input():
+    if keyboard.e:
+        exit()
+    if keyboard.left:
+        plane.x -= 8
+    if keyboard.right:
+        plane.x += 8
+    if keyboard.up:
+        plane.vy += 0.1
+    if keyboard.down:
+        plane.vy -= 0.1
+
+def move_barrel_fuel():
+    global time, score
+    barrel_fuel.y = barrel_fuel.y + 3 + score / 100
+    if barrel_fuel.y > 600:
+        barrel_fuel.x = random.randint(20, 780)
+        barrel_fuel.y = 0
+    if barrel_fuel.colliderect(plane):
+        barrel_fuel.x = random.randint(20, 780)
+        barrel_fuel.y = 0
+        time += 10
+    for bullet in bullets:
+        if bullet.colliderect(barrel_fuel):
+            barrel_fuel.x = random.randint(20, 780)
+            barrel_fuel.y = 0
+            score = score + 80
+
+def move_bullets():
+    for bullet in bullets:
+        bullet.y = bullet.y - 6
+        if bullet.y < 0:
+            bullets.remove(bullet)
+
+def generate_lines():
+    global wall_gradient, left_wall_x
+    gap_width = 650 + math.sin(distance / 3000) * 100
+    while len(lines) < HEIGHT:
+        pretty_colour = (51, 102, 0)
+        lines.insert(0, (left_wall_x, gap_width, pretty_colour))
+        left_wall_x += wall_gradient
+        if left_wall_x < 0:
+            left_wall_x = 0
+            wall_gradient = random.random()* 2 + 0.1
+        elif left_wall_x + gap_width > WIDTH:
+            left_wall_x = WIDTH - gap_width
+            wall_gradient = -random.random() * 2 - 0.1
+
+generate_lines()
+
+def scroll_walls():
+    global distance, distance
+    for i in range(0, int(plane.vy)):
+        lines.pop()
+        distance += 4
+
+def fuel(delta):
+    global time, game_over
+    time -= 0.05
+    if time < 0:
+        game_over = True
+
+def move_enemies():
+    global score, game_over
+    enemy.y = enemy.y + 4 + score / 100
+    if enemy.y > 600:
+        enemy.x = random.randint(20, 780)
+        enemy.y = 0
+    for bullet in bullets:
+        if bullet.colliderect(enemy):
+            enemy.x = random.randint(20, 780)
+            enemy.y = 0
+            score = score + 30
+    if enemy.colliderect(plane):
+        game_over = True
+
+def wall_collisions():
+    global game_over
+    a, b, c = lines[-1]
+    if plane.x < a:
+        game_over = True
+        plane.x += 5
+        plane.vx = plane.vx * -0.5
+        plane.vy = 0
+    if plane.x > a + b:
+        game_over = True
+        plane.x -= 5
+        plane.vx = plane.vx * -0.5
+        plane.vy = 0
+
+def on_key_down(key):
+    if key == keys.SPACE and len(bullets) < MAX_BULLETS:
+        bullet = Actor("player_bullet", pos=(plane.x, plane.y))
+        bullets.append(bullet)
+        sounds.sfx_sounds_interaction25.play()
+
+def draw():
+    screen.clear()
+    screen.fill((0, 102, 204))
+    if game_over:
+        screen.draw.text('Koniec Gry', (360, 300), color="black" , fontsize=60)
+        screen.draw.text('WYNIK: ' + str(score), (360, 350), color="black", fontsize=60)
+        screen.draw.text('Ghost River', (300, 100), color="dark green", fontsize=100)
+        for i in range(0, len(lines)): # draw the walls
+            x, x2, color = lines[i]
+            screen.draw.line((0, i), (x, i), color)
+            screen.draw.line((x + x2, i), (WIDTH, i), color)
+    else:
+        for i in range(0, len(lines)): # draw the walls
+            x, x2, color = lines[i]
+            screen.draw.line((0, i), (x, i), color)
+            screen.draw.line((x + x2, i), (WIDTH, i), color)
+        for bullet in bullets:
+            bullet.draw()
+        plane.draw()
+        enemy.draw()
+        for i in range(100):
+            barrel_fuel.draw()
+        screen.draw.text("SZYBKOŚĆ: " + str(int(plane.vy)),
+            (0, 0), color="white", fontsize=40)
+        screen.draw.text("DYSTANS: " + str(int(distance / 10)),
+            (200, 0), color="white", fontsize=40)
+        screen.draw.text("PALIWO: " + str(int(time)),
+            (440, 0), color="white", fontsize=40)
+        screen.draw.text("WYNIK: " + str(int(score)),
+            (635, 0), color="white", fontsize=40)
+        if not playing:
+            screen.draw.text('Naciśnij spacje, żeby zagrać', (300, 400), color="green", fontsize=45)
+            screen.draw.text('Ghost River', (300, 100), color="green", fontsize=100)
+pgzrun.go()  # to musi być
